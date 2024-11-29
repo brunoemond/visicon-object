@@ -1,4 +1,4 @@
-# visicon-object class and methods
+# visicon-object class and methods (version 1.0 2024/11/29)
 
 The **visicon-object class and methods** is a software module designed to work with the ACT-R cognitive architecture, providing an interface for managing visual feature representations of CLOS objects in the ACT-R visicon. 
 
