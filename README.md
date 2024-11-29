@@ -39,4 +39,53 @@ The software includes the visicon-object class which support the definition of c
 
 - The visicon-object.lisp file defines a function to demonstrate the core functionality of the software.
 
+```lisp
+(defun run-demo ()
+
+  ;; Define a class that inherits from visicon-object
+  (defclass square (visicon-object)
+    ((sides :initform 4 :reader sides)
+     (regular :initform 'true :reader regular))
+    (:default-initargs
+     :visloc-type 'square-features
+     :visobj-type 'square
+     :height 100
+     :width 100
+     :visual-location-features '(regular)
+     :visual-object-features '(sides)))
+
+  ;; create instances
+  (let ((vo1 (make-instance 'visicon-object))
+        (vo2 (make-instance 'visicon-object :x 20 :y 20 :z (cm->pixels 40)))
+        (square (make-instance 'square :x 30 :y 30)))
+
+    (echo-act-r-output)
+
+    ;; define a model
+    (clear-all)
+    (define-model test
+      ;; visual-location and object chunk-types definition
+      (visual-location-chunk-type 'square)
+      (visual-object-chunk-type 'square)
+      (define-chunks square true))
+
+    ;; example for visicon methods
+    (format t "ADD TO VISICON~%")
+    (add-to-visicon (list vo1 vo2 square))
+    (run-n-events 3)
+    (print-visicon)
+
+    (format t "MODIFY VISICON~%")
+    (setf (x vo1) 10)
+    (modify-visicon vo1)
+    (run-n-events 3)
+    (print-visicon)
+
+    (format t "DELETE FROM VISICON~%")
+    (delete-from-visicon vo1)
+    (run-n-events 3)
+    (print-visicon)
+    (unintern 'square)))
+```
+
 - The examples/adjust-visicon-features-modified.lisp file contains annotated and adapted code for the visicon-object class and methods. The original code can be found at this logical pathname location: "ACT-R:examples;vision-module;adjust-visicon-features.lisp". 
