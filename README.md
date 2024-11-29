@@ -89,3 +89,5 @@ The software includes the visicon-object class which support the definition of c
 ```
 
 - The examples/adjust-visicon-features-modified.lisp file contains annotated and adapted code for the visicon-object class and methods. The original code can be found at this logical pathname location: "ACT-R:examples;vision-module;adjust-visicon-features.lisp". 
+
+- The examples folder has 2 files for a model and visicon-object of a piano keyboard.
