@@ -1,0 +1,372 @@
+;;;-*- mode: LISP; Package: CL-USER; Syntax: COMMON-LISP;  Base: 10 -*-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; 
+;;; visicon-objet 
+;;; Version 1.0 (2024/11/29)
+;;;
+;;; Copyright (C) 2024  Bruno Emond 
+;;; bruno.emond@icloud.com
+;;;
+;;; This library is free software; you can redistribute it and/or
+;;; modify it under the terms of the GNU Lesser General Public
+;;; License as published by the Free Software Foundation; either
+;;; version 2.1 of the License, or any later version.
+;;;
+;;; This library is distributed in the hope that it will be useful,
+;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+;;; Lesser General Public License for more details.
+;;;
+;;; You should have received a copy of the GNU Lesser General Public
+;;; License along with this library; if not, write to the Free Software
+;;; Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+;;; USA
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; The software includes the visicon-object class which support the definition
+;;; of custom objects that will be represented in the visicon. 
+;;; 
+;;; *** visicon methods ***
+;;; (add-to-visicon visicon-object)
+;;; (add-to-visicon list-of-visicon-objects)
+;;; (modify-visicon visicon-object)
+;;; (delete-from-visicon visicon-object)
+;;; (delete-from-visicon list-of-visicon-objects)
+;;;
+;;; *** chunk-type definition methods ***
+;;; (visual-location-chunk-type class-name)
+;;; (visual-object-chunk-type class-name)
+;;;
+;;; (run-demo)
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defparameter *actr-pixels/inch* 72
+  "Value for the :pixels/inch parameter.")
+
+(defparameter *actr-viewing-distance* 15
+  "Value in inches for the :viewing-distance parameter.")
+
+(defparameter *cm/inch* 2.45
+  "There are 2.45 centimeters per inch.")
+
+(defun cm->pixels (centimeters)
+  "Convert cm to pixels."
+  (floor (* (/ centimeters *cm/inch*) 
+            *actr-pixels/inch*)))
+
+(defclass visicon-object ()
+  ((screen-x :initform 0 :initarg :screen-x)
+   (screen-y :initform 0 :initarg :screen-y)
+   (distance :initform nil :initarg :distance)
+   (width :initform 1 :initarg :width :accessor width)
+   (height :initform 1 :initarg :height :accessor height)
+   (color :initform nil :initarg :color :accessor color)
+   (value :initform nil :initarg :value :accessor value)
+   (visloc-type :initform 'visual-location :initarg :visloc-type
+                :documentation "The visual-location type used in the add-visicon-features command.")
+   (visobj-type :initform 'visual-object :initarg :visobj-type
+                :documentation "The visual-object type used in the add-visicon-features command.")
+   (visual-features :initform nil :initarg :visual-features
+                    :documentation "List of slots shared by visual-location and visual-object features.")
+   (visual-location-features :initform nil :initarg :visual-location-features
+                    :documentation "List of slots for visual-location features.")
+   (visual-object-features :initform nil :initarg :visual-object-features
+                    :documentation "List of slots for visual-object features.")
+   (feature-id :initform nil :reader feature-id
+               :documentation "The feature id returned by the add-visicon-features command.")
+   (screen-pos :initform nil)
+   (kind :initform nil)
+   (status :initform nil)
+   (size :initform nil))
+  (:documentation 
+   "This class encapsulates information about visual locations and the attributes of visual objects.
+It includes slots used by the follwoing ACT-R chunk types:
+visual-location: (screen-x, screen-y, distance, kind, color, value, height, width, size)
+visual-object: (screen-pos, value, status, color, height, width)
+The distance attribute defaults to the value specified by the ACT-R :viewing-distance parameter if not explicitly provided when creating an object instance. This parameter is converted into pixels by ACT-R (e.g. 15×72=1080).
+The attribute 'kind' is included in a visicon entry for an instance only if the 'value' attribute is not NIL. 
+Attributes such as 'size' and 'status' are computed automatically by ACT-R at runtime."))
+
+(defmethod initialize-instance :after ((object visicon-object) &rest initargs &key &allow-other-keys)
+  (with-slots (screen-x screen-y distance) object
+    (when-let (x (getf initargs :x))
+      (setf screen-x x))
+    (when-let (y (getf initargs :y))
+      (setf screen-y y))
+    (when-let (z (getf initargs :z))
+      (setf distance z))))
+
+(defmethod x ((object visicon-object))
+  (with-slots (screen-x) object
+    screen-x))
+
+(defmethod (setf x) (value (object visicon-object))
+  (with-slots (screen-x) object
+    (setf screen-x value)))
+
+(defmethod y ((object visicon-object))
+  (with-slots (screen-y) object
+    screen-y))
+
+(defmethod (setf y) (value (object visicon-object))
+  (with-slots (screen-y) object
+    (setf screen-y value)))
+
+(defmethod z ((object visicon-object))
+  (with-slots (distance) object
+    distance))
+
+(defmethod (setf z) (value (object visicon-object))
+  (with-slots (distance) object
+    (setf distance value)))
+
+(defun features-chunk-types (visicon-object)
+  "The types to used for the add-visicon-features command."
+  (with-slots (visloc-type visobj-type) visicon-object
+    (if (equal 'visual-object visobj-type)
+        `(isa ,visloc-type)
+      `(isa (,visloc-type ,visobj-type)))))
+
+(let ((vo1 (make-instance 'visicon-object))
+      (vo2 (make-instance 'visicon-object :visloc-type 'vis-loc :visobj-type 'vis-obj)))
+  (assert (equal '(ISA VISUAL-LOCATION)
+                 (features-chunk-types vo1)))
+  (assert (equal '(isa (vis-loc vis-obj))
+                 (features-chunk-types vo2))))
+
+;;;
+;;; act-r features functions interface
+;;;
+(defun default-visual-location-features (visicon-object)
+  "Default visual-location features."
+  (with-slots (screen-x screen-y width height color value distance visobj-type) visicon-object
+    (append `(screen-x ,screen-x)
+            `(screen-y ,screen-y)
+            `(width ,width)
+            `(height ,height)
+            (when value `(value (,visobj-type ,value)))
+            (when color `(color ,color))          
+            (when distance `(distance ,distance)))))
+
+(let ((vo (make-instance 'visicon-object)))
+  (assert (equal '(SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1)
+                 (default-visual-location-features vo))))
+
+(defun vo-visual-features (visicon-object)
+  (with-slots (visual-features) visicon-object
+    (let (features)
+      (dolist (slot visual-features features)
+        (setf features 
+              (append features 
+                      (list slot 
+                            (slot-value visicon-object slot))))))))
+
+(defun visual-location-features (visicon-object)
+  (with-slots (visual-location-features) visicon-object
+    (let (features)
+      (dolist (slot visual-location-features features)
+        (setf features 
+              (append features 
+                      (list slot 
+                            (list (slot-value visicon-object slot) nil))))))))
+
+(defun visual-object-features (visicon-object)
+  (with-slots (visual-object-features) visicon-object
+    (let (features)
+      (dolist (slot visual-object-features features)
+        (setf features 
+              (append features 
+                      (list slot 
+                            (list nil (slot-value visicon-object slot)))))))))
+
+(defun isa-features (visicon-object)
+  (append
+   (features-chunk-types visicon-object)
+   (default-visual-location-features visicon-object)
+   (vo-visual-features visicon-object)
+   (visual-location-features visicon-object)
+   (visual-object-features visicon-object)))
+
+(defun modification-features-list (visicon-object)
+  (append
+   (list (feature-id visicon-object))
+   (default-visual-location-features visicon-object)
+   (vo-visual-features visicon-object)
+   (visual-location-features visicon-object)
+   (visual-object-features visicon-object)))
+
+(let ((vo (make-instance 'visicon-object)))
+  (assert (equal '(ISA VISUAL-LOCATION SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1)
+                 (isa-features vo))))
+;;;
+;;; act-r chunk-typr and chunk functions interface
+;;;
+(defun visual-location-type (class-name)
+  (let ((class (find-class class-name)))
+    (or 
+     (cadadr (assoc :visloc-type 
+                    (class-default-initargs class)))
+     (cadr (slot-definition-initform
+            (find 'visloc-type 
+                  (class-slots (find-class class-name))
+                  :key #'slot-definition-name))))))
+
+(defun visual-object-type (class-name)
+  (let ((class (find-class class-name)))
+    (or 
+     (cadadr (assoc :visobj-type 
+                    (class-default-initargs class)))
+     (cadr (slot-definition-initform
+         (find 'visobj-type 
+               (class-slots (find-class class-name))
+               :key #'slot-definition-name))))))
+
+(defun visual-chunk-type-slots (class-name)
+  (when-let (class (find-class class-name))
+    (append (cadr (slot-definition-initform
+                   (find 'visual-features (class-slots class)
+                         :key #'slot-definition-name)))
+            (cadadr (assoc :visual-features 
+                           (class-default-initargs class))))))
+
+(defun visual-location-chunk-type-slots (class-name)
+  (when-let (class (find-class class-name))
+    (append (cadr (slot-definition-initform
+                   (find 'visual-location-features (class-slots class)
+                         :key #'slot-definition-name)))
+            (cadadr (assoc :visual-location-features 
+                           (class-default-initargs class))))))
+
+(defun visual-object-chunk-type-slots (class-name)
+  (when-let (class (find-class class-name))
+    (append (cadr (slot-definition-initform
+                   (find 'visual-object-features (class-slots class)
+                         :key #'slot-definition-name)))
+            (cadadr (assoc :visual-object-features 
+                           (class-default-initargs class))))))
+
+(defun visual-location-chunk-type-spec (class-name)
+  (when (visual-location-type class-name)
+    (append `((,(visual-location-type class-name)
+               (:include visual-location)))
+            (visual-chunk-type-slots class-name)
+            (visual-location-chunk-type-slots class-name))))
+
+(defun visual-object-chunk-type-spec (class-name)
+  (when (visual-object-type class-name)
+    (append `((,(visual-object-type class-name)
+               (:include visual-object)))
+            (visual-chunk-type-slots class-name)
+            (visual-object-chunk-type-slots class-name))))
+
+(progn 
+  (defclass square (visicon-object)
+    ((sides :initform 4 :reader sides)
+     (regular :initform 'true :reader regular))
+    (:default-initargs
+     :visloc-type 'square-features
+     :visobj-type 'square
+     :visual-location-features '(regular)
+     :visual-object-features '(sides)))
+  (assert (equal 'visual-location (visual-location-type 'visicon-object)))
+  (assert (equal 'visual-object (visual-object-type 'visicon-object)))
+  (assert (equal 'square (visual-object-type 'square)))
+  (assert (equal '((SQUARE-FEATURES (:INCLUDE VISUAL-LOCATION)) REGULAR)
+                 (visual-location-chunk-type-spec 'square)))
+  (assert (equal '((SQUARE (:INCLUDE VISUAL-OBJECT)) SIDES)
+                 (visual-object-chunk-type-spec 'square)))
+  (unintern 'square))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Methods to add, modify and delete a visicon entry.
+;;; The methods provide and interface to ACT-R visual features functions. 
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defmethod add-to-visicon ((object visicon-object))
+  (with-slots (feature-id) object
+    (setf feature-id (car (add-visicon-features (isa-features object))))))
+
+(defmethod add-to-visicon ((objects list))
+  (dolist (object objects t)
+    (add-to-visicon object)))
+
+(defun modify-visicon (visicon-object)
+  (modify-visicon-features 
+   (modification-features-list visicon-object)))
+
+(defmethod delete-from-visicon ((object visicon-object))
+  (with-slots (feature-id) object
+    (delete-visicon-features feature-id)
+    (setf feature-id nil)))
+
+(defmethod delete-from-visicon ((objects list))
+  (dolist (object objects t)
+    (delete-from-visicon object)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Methods to define sub-types of visual-location and visual-object types.
+;;; The methods provide and interface to ACT-R chunk-type function. 
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defun visual-location-chunk-type (class-name)
+  (when (visual-location-type class-name)
+    (apply #'chunk-type-fct
+           (list (visual-location-chunk-type-spec class-name)))))
+
+(defun visual-object-chunk-type (class-name)
+  (when (visual-object-type class-name)
+    (apply #'chunk-type-fct
+           (list (visual-object-chunk-type-spec class-name)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;              
+(defun run-demo ()
+
+  ;; Define a class that inherits from visicon-object
+  (defclass square (visicon-object)
+    ((sides :initform 4 :reader sides)
+     (regular :initform 'true :reader regular))
+    (:default-initargs
+     :visloc-type 'square-features
+     :visobj-type 'square
+     :height 100
+     :width 100
+     :visual-location-features '(regular)
+     :visual-object-features '(sides)))
+
+  ;; create instances
+  (let ((vo1 (make-instance 'visicon-object))
+        (vo2 (make-instance 'visicon-object :x 20 :y 20 :z (cm->pixels 40)))
+        (square (make-instance 'square :x 30 :y 30)))
+
+    (echo-act-r-output)
+
+    ;; define a model
+    (clear-all)
+    (define-model test
+      ;; visual-location and object chunk-types definition
+      (visual-location-chunk-type 'square)
+      (visual-object-chunk-type 'square)
+      (define-chunks square true))
+
+    ;; example for visicon methods
+    (format t "ADD TO VISICON~%")
+    (add-to-visicon (list vo1 vo2 square))
+    (run-n-events 3)
+    (print-visicon)
+
+    (format t "MODIFY VISICON~%")
+    (setf (x vo1) 10)
+    (modify-visicon vo1)
+    (run-n-events 3)
+    (print-visicon)
+
+    (format t "DELETE FROM VISICON~%")
+    (delete-from-visicon vo1)
+    (run-n-events 3)
+    (print-visicon)
+    (unintern 'square)))
+
+:eof
