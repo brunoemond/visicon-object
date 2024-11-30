@@ -295,7 +295,7 @@
 
   (run-n-events 5)
 
-  (define-chunks-fct '((goal isa find-key step find-a-key octave 3 group b2 group-pos 1 color w)))
+  (define-chunks-fct '((goal isa find-key step find-a-key octave 4 group b2 group-pos 1 color w)))
 
   ;; find middle-c
   (goal-focus-fct 'goal)
