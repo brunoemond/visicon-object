@@ -1,8 +1,5 @@
 ;;;-*- mode: LISP; Package: CL-USER; Syntax: COMMON-LISP;  Base: 10 -*-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; 
-;;; visicon-objet 
-;;; Version 1.0 (2024/11/29)
 ;;;
 ;;; Copyright (C) 2024  Bruno Emond 
 ;;; bruno.emond@icloud.com
@@ -21,6 +18,30 @@
 ;;; License along with this library; if not, write to the Free Software
 ;;; Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
 ;;; USA
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; 
+;;; Filename    : visicon-objet.lisp
+;;; Version     : 1.1 (2024-12-02)
+;;; 
+;;; Description : The **visicon-object class and methods** is a software module
+;;;             : designed to work with the ACT-R cognitive architecture, 
+;;;             : providing an interface for managing visual feature 
+;;;             : representations of CLOS objects in the ACT-R visicon.
+;;; 
+;;; Bugs        : 
+;;;
+;;; To do       : 
+;;; 
+;;; ----- History -----
+;;;
+;;; 2024.11.29 Bruno  
+;;;             : Version 1.0
+;;;
+;;; 2024.12.02 Bruno  
+;;;             : Version 1.1. Added a hash table to support motor interactions
+;;;             : with visicon-objects using visual-location chunk names as a
+;;;             ; reference (hash table key).
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -75,6 +96,8 @@
                     :documentation "List of slots for visual-object features.")
    (feature-id :initform nil :reader feature-id
                :documentation "The feature id returned by the add-visicon-features command.")
+   (visual-location :initform nil :reader visual-location
+                    :documentation "The name of the visual-location chunk for the visicon feature.")
    (screen-pos :initform nil)
    (kind :initform nil)
    (status :initform nil)
@@ -278,15 +301,57 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
                  (visual-object-chunk-type-spec 'square)))
   (unintern 'square))
 
+;;;
+;;; visicon-object chunks
+;;;
+(defmethod has-slot-p ((object visicon-object) slot-name)
+  (find slot-name
+        (mapcar #'slot-definition-name
+                (class-slots (class-of object)))
+        :test #'eq))
+
+(defmethod collect-symbol-values ((object visicon-object) (slot-name symbol))
+  (when (and (has-slot-p object slot-name)
+             (slot-boundp object slot-name))
+    (let ((slot-value (slot-value object slot-name)))
+      (when (and slot-value 
+                 (symbolp slot-value))
+        (list slot-value)))))
+
+(defmethod collect-symbol-values ((object visicon-object) (slot-names list))
+  (let (chunk-names)
+    (dolist (slot-name slot-names chunk-names)
+      (setf chunk-names
+            (append chunk-names (collect-symbol-values object slot-name))))))
+
+(defun visicon-object-chunks (visicon-object slot-names)
+  (define-chunks-fct (collect-symbol-values visicon-object slot-names)))
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;; Methods to add, modify and delete a visicon entry.
 ;;; The methods provide and interface to ACT-R visual features functions. 
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defparameter *visicon-objects* (make-hash-table)
+  "A hash table to map visual-location names to visicon-object instances.")
+
+(defun clear-visicon-objects ()
+  (clrhash *visicon-objects*))
+
+(defmethod get-visicon-object ((visual-location symbol))
+  (gethash visual-location *visicon-objects*))
+
+(defmethod (setf get-visicon-object) ((visicon-object visicon-object) (visual-location symbol))
+  (setf (gethash visual-location *visicon-objects*)
+        visicon-object))
+
 (defmethod add-to-visicon ((object visicon-object))
-  (with-slots (feature-id) object
-    (setf feature-id (car (add-visicon-features (isa-features object))))))
+  (with-slots (feature-id visual-location) object
+    (setf feature-id (car (add-visicon-features (isa-features object)))
+          visual-location (chunk-visual-loc feature-id)
+          (get-visicon-object visual-location) object)))
 
 (defmethod add-to-visicon ((objects list))
   (dolist (object objects t)
@@ -297,9 +362,11 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
    (modification-features-list visicon-object)))
 
 (defmethod delete-from-visicon ((object visicon-object))
-  (with-slots (feature-id) object
+  (with-slots (feature-id visual-location) object 
     (delete-visicon-features feature-id)
-    (setf feature-id nil)))
+    (remhash visual-location *visicon-objects*)
+    (setf feature-id nil
+          visual-location nil)))
 
 (defmethod delete-from-visicon ((objects list))
   (dolist (object objects t)
@@ -322,8 +389,6 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
            (list (visual-object-chunk-type-spec class-name)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;              
-(defun run-demo ()
-
   ;; Define a class that inherits from visicon-object
   (defclass square (visicon-object)
     ((sides :initform 4 :reader sides)
@@ -335,6 +400,17 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
      :width 100
      :visual-location-features '(regular)
      :visual-object-features '(sides)))
+
+(defmethod say-square ((object square))
+    (format t "SQUARE~%"))
+
+(defmethod say-square ((object symbol))
+  (say-square (get-visicon-object object)))
+
+
+(defun run-demo ()
+
+  (clear-visicon-objects)
 
   ;; create instances
   (let ((vo1 (make-instance 'visicon-object))
@@ -349,7 +425,9 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
       ;; visual-location and object chunk-types definition
       (visual-location-chunk-type 'square)
       (visual-object-chunk-type 'square)
-      (define-chunks square true))
+      (define-chunks square true)
+      ;(visicon-object-chunks square '(kind sides))
+      )
 
     ;; example for visicon methods
     (format t "ADD TO VISICON~%")
@@ -367,6 +445,11 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
     (delete-from-visicon vo1)
     (run-n-events 3)
     (print-visicon)
-    (unintern 'square)))
+
+    ;; Action on a visicon-object using the 
+    ;; visual-location as a key
+    (say-square (visual-location square))
+
+    ))
 
 :eof
