@@ -1,8 +1,5 @@
 ;;;-*- mode: LISP; Package: CL-USER; Syntax: COMMON-LISP;  Base: 10 -*-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; 
-;;; piano-keyboard 
-;;; A set of classes and methods to use with the visicon-object class. 
 ;;;
 ;;; Copyright (C) 2024  Bruno Emond 
 ;;; bruno.emond@icloud.com
@@ -21,6 +18,23 @@
 ;;; License along with this library; if not, write to the Free Software
 ;;; Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
 ;;; USA
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; 
+;;; Filename    : piano-keyboard.lisp
+;;; Version     : 1.0 (2024-11-29)
+;;; 
+;;; Description : A set of classes and methods to use with the 
+;;;             : visicon-object class. 
+;;; 
+;;; Bugs        : 
+;;;
+;;; To do       : - Hands actions on the keyboard.
+;;; 
+;;; ----- History -----
+;;;
+;;; 2024.11.29 Bruno  
+;;;             : Version 1.0
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
