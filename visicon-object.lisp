@@ -31,7 +31,8 @@
 ;;; 
 ;;; Bugs        : 
 ;;;
-;;; To do       : 
+;;; To do       : A function that would define chunks for symbols created as slot 
+;;;             ; values of visicon-object slots.
 ;;; 
 ;;; ----- History (reversed time order) -----
 ;;;
