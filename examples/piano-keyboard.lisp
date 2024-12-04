@@ -332,7 +332,7 @@
 
 (load-act-r-model 
  (make-pathname 
-  :directory (pathname-directory (or *load-truename* *compile-file-pathname*))
+  :directory (pathname-directory #.(pathname "piano-keyboard.lisp"))
   :type "lisp"
   :name "piano-keyboard-model"))
 
