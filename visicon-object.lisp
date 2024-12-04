@@ -22,7 +22,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; 
 ;;; Filename    : visicon-objet.lisp
-;;; Version     : 1.1 (2024-12-02)
+;;; Version     : 1.2 (2024-12-04)
 ;;; 
 ;;; Description : The **visicon-object class and methods** is a software module
 ;;;             : designed to work with the ACT-R cognitive architecture, 
@@ -33,15 +33,18 @@
 ;;;
 ;;; To do       : 
 ;;; 
-;;; ----- History -----
+;;; ----- History (reversed time order) -----
 ;;;
-;;; 2024.11.29 Bruno  
-;;;             : Version 1.0
+;;; 2024.12.04 Bruno  
+;;;             : Version 1.2. Replaced when-let macro for better compatibility.
 ;;;
 ;;; 2024.12.02 Bruno  
 ;;;             : Version 1.1. Added a hash table to support motor interactions
 ;;;             : with visicon-objects using visual-location chunk names as a
 ;;;             ; reference (hash table key).
+;;;
+;;; 2024.11.29 Bruno  
+;;;             : Version 1.0
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -113,12 +116,12 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
 
 (defmethod initialize-instance :after ((object visicon-object) &rest initargs &key &allow-other-keys)
   (with-slots (screen-x screen-y distance) object
-    (when-let (x (getf initargs :x))
-      (setf screen-x x))
-    (when-let (y (getf initargs :y))
-      (setf screen-y y))
-    (when-let (z (getf initargs :z))
-      (setf distance z))))
+    (let ((x (getf initargs :x))
+          (y (getf initargs :y))
+          (z (getf initargs :z)))
+      (when x (setf screen-x x))
+      (when y (setf screen-y y))
+      (when z (setf distance z)))))
 
 (defmethod x ((object visicon-object))
   (with-slots (screen-x) object
@@ -223,8 +226,10 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
   (assert (equal '(ISA VISUAL-LOCATION SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1)
                  (isa-features vo))))
 ;;;
-;;; act-r chunk-typr and chunk functions interface
+;;; act-r chunk-type and chunk functions interface
 ;;;
+
+
 (defun visual-location-type (class-name)
   (let ((class (find-class class-name)))
     (or 
@@ -236,7 +241,7 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
                   :key #'slot-definition-name))))))
 
 (defun visual-object-type (class-name)
-  (let ((class (find-class class-name)))
+  (let ((class (find-class class-name nil)))
     (or 
      (cadadr (assoc :visobj-type 
                     (class-default-initargs class)))
@@ -246,28 +251,31 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
                :key #'slot-definition-name))))))
 
 (defun visual-chunk-type-slots (class-name)
-  (when-let (class (find-class class-name))
-    (append (cadr (slot-definition-initform
-                   (find 'visual-features (class-slots class)
-                         :key #'slot-definition-name)))
-            (cadadr (assoc :visual-features 
-                           (class-default-initargs class))))))
+  (let ((class (find-class class-name)))
+    (when class
+      (append (cadr (slot-definition-initform
+                     (find 'visual-features (class-slots class)
+                           :key #'slot-definition-name)))
+              (cadadr (assoc :visual-features 
+                             (class-default-initargs class)))))))
 
 (defun visual-location-chunk-type-slots (class-name)
-  (when-let (class (find-class class-name))
-    (append (cadr (slot-definition-initform
-                   (find 'visual-location-features (class-slots class)
-                         :key #'slot-definition-name)))
-            (cadadr (assoc :visual-location-features 
-                           (class-default-initargs class))))))
+  (let ((class (find-class class-name)))
+    (when class
+      (append (cadr (slot-definition-initform
+                     (find 'visual-location-features (class-slots class)
+                           :key #'slot-definition-name)))
+              (cadadr (assoc :visual-location-features 
+                             (class-default-initargs class)))))))
 
 (defun visual-object-chunk-type-slots (class-name)
-  (when-let (class (find-class class-name))
-    (append (cadr (slot-definition-initform
-                   (find 'visual-object-features (class-slots class)
-                         :key #'slot-definition-name)))
-            (cadadr (assoc :visual-object-features 
-                           (class-default-initargs class))))))
+  (let ((class (find-class class-name)))
+    (when class
+      (append (cadr (slot-definition-initform
+                     (find 'visual-object-features (class-slots class)
+                           :key #'slot-definition-name)))
+              (cadadr (assoc :visual-object-features 
+                             (class-default-initargs class)))))))
 
 (defun visual-location-chunk-type-spec (class-name)
   (when (visual-location-type class-name)
