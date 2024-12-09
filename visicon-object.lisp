@@ -366,9 +366,9 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
   (dolist (object objects t)
     (add-to-visicon object)))
 
-(defun modify-visicon (visicon-object)
+(defmethod modify-visicon ((object visicon-object))
   (modify-visicon-features 
-   (modification-features-list visicon-object)))
+   (modification-features-list object)))
 
 (defmethod delete-from-visicon ((object visicon-object))
   (with-slots (feature-id visual-location) object 
