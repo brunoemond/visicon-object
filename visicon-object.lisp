@@ -197,12 +197,12 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
             `(screen-y ,screen-y)
             `(width ,width)
             `(height ,height)
-            (if value `(value (,visobj-type ,value)) `(value nil))
-            (if color `(color ,color) `(color nil))          
-            (if distance `(distance ,distance) `(distance nil)))))
+            (when value `(value (,visobj-type ,value)))
+            (when color `(color ,color))          
+            (when distance `(distance ,distance)))))
 
 (let ((vo (make-instance 'visicon-object)))
-  (assert (equal '(SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1 VALUE NIL COLOR NIL DISTANCE NIL)
+  (assert (equal '(SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1)
                  (default-visual-location-features vo))))
 
 (defun vo-visual-features (visicon-object)
@@ -239,11 +239,9 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
   (let ((combined-features (default-visual-location-features visicon-object)))
     (dolist (features (list (vo-visual-features visicon-object)
                             (visual-location-features visicon-object)
-                            (visual-object-features visicon-object)
-                            ) 
+                            (visual-object-features visicon-object)) 
                       combined-features)
       (setf combined-features (append-features combined-features features)))))
-
 
 (defun isa-features (visicon-object)
   (append (features-chunk-types visicon-object)
@@ -254,7 +252,7 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
           (combined-features visicon-object)))
 
 (let ((vo (make-instance 'visicon-object)))
-  (assert (equal '(ISA VISUAL-LOCATION SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1 VALUE NIL COLOR NIL DISTANCE NIL)
+  (assert (equal '(ISA VISUAL-LOCATION SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1)
                  (isa-features vo))))
 ;;;
 ;;; act-r chunk-type and chunk functions interface
