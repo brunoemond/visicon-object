@@ -22,7 +22,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; 
 ;;; Filename    : visicon-objet.lisp
-;;; Version     : 1.2 (2024-12-04)
+;;; Version     : 1.3 (2025-01-08)
 ;;; 
 ;;; Description : The **visicon-object class and methods** is a software module
 ;;;             : designed to work with the ACT-R cognitive architecture, 
@@ -35,6 +35,10 @@
 ;;;             ; values of visicon-object slots.
 ;;; 
 ;;; ----- History (reversed time order) -----
+;;;
+;;; 2025.01.08 Bruno  
+;;;             : Version 1.3. New device-objet class for independent device 
+;;;               modelling and model visual perception through the visicon.
 ;;;
 ;;; 2024.12.04 Bruno  
 ;;;             : Version 1.2. Replaced when-let macro for better compatibility.
@@ -81,7 +85,8 @@
             *actr-pixels/inch*)))
 
 (defclass visicon-object ()
-  ((screen-x :initform 0 :initarg :screen-x)
+  ((uid :initarg :uid :reader uid)
+   (screen-x :initform 0 :initarg :screen-x)
    (screen-y :initform 0 :initarg :screen-y)
    (distance :initform nil :initarg :distance)
    (width :initform 1 :initarg :width :accessor width)
@@ -163,7 +168,7 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
                  (features-chunk-types vo2))))
 
 ;;;
-;;; act-r features functions interface
+;;; act-r feature functions interface
 ;;;
 (defun default-visual-location-features (visicon-object)
   "Default visual-location features."
@@ -229,8 +234,6 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
 ;;;
 ;;; act-r chunk-type and chunk functions interface
 ;;;
-
-
 (defun visual-location-type (class-name)
   (let ((class (find-class class-name)))
     (or 
@@ -340,7 +343,7 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;; Methods to add, modify and delete a visicon entry.
-;;; The methods provide and interface to ACT-R visual features functions. 
+;;; The methods provide an interface to ACT-R visual features functions. 
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defparameter *visicon-objects* (make-hash-table)
@@ -362,10 +365,6 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
           visual-location (chunk-visual-loc feature-id)
           (get-visicon-object visual-location) object)))
 
-(defmethod add-to-visicon ((objects list))
-  (dolist (object objects t)
-    (add-to-visicon object)))
-
 (defmethod modify-visicon ((object visicon-object))
   (modify-visicon-features 
    (modification-features-list object)))
@@ -377,14 +376,35 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
     (setf feature-id nil
           visual-location nil)))
 
+(defclass device-objects ()
+  ((device-objects :initarg :htable :initform (make-hash-table) :reader device-objects)
+   (visicon-objects :initarg :index :initform *visicon-objects* :reader visicon-objects))
+  (:documentation 
+   "The class holds hash tables for device objects (not necessary in the visicon) and the same objects that
+are in the visicon. This distinction allows to access device objects independly of the fact that they are
+accessible from a visual-location chunk. This functionality separates device modeling from the cognitive model
+interaction with a device."))
+
+(defmethod add-to-visicon ((objects list))
+  (dolist (object objects t)
+    (add-to-visicon object)))
+
 (defmethod delete-from-visicon ((objects list))
   (dolist (object objects t)
     (delete-from-visicon object)))
 
+(defmethod add-to-visicon ((object device-objects))
+  (maphash 
+   (lambda (key value)
+     (declare (ignore key))
+     (add-to-visicon value))
+   (device-objects object))
+  object)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;; Methods to define sub-types of visual-location and visual-object types.
-;;; The methods provide and interface to ACT-R chunk-type function. 
+;;; The methods provide an interface to ACT-R chunk-type function. 
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defun visual-location-chunk-type (class-name)
@@ -398,17 +418,17 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
            (list (visual-object-chunk-type-spec class-name)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;              
-  ;; Define a class that inherits from visicon-object
-  (defclass square (visicon-object)
-    ((sides :initform 4 :reader sides)
-     (regular :initform 'true :reader regular))
-    (:default-initargs
-     :visloc-type 'square-features
-     :visobj-type 'square
-     :height 100
-     :width 100
-     :visual-location-features '(regular)
-     :visual-object-features '(sides)))
+;; Define a class that inherits from visicon-object
+(defclass square (visicon-object)
+  ((sides :initform 4 :reader sides)
+   (regular :initform 'true :reader regular))
+  (:default-initargs
+   :visloc-type 'square-features
+   :visobj-type 'square
+   :height 100
+   :width 100
+   :visual-location-features '(regular)
+   :visual-object-features '(sides)))
 
 (defmethod say-square ((object square))
     (format t "SQUARE~%"))
