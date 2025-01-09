@@ -359,6 +359,8 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
   (setf (gethash visual-location *visicon-objects*)
         visicon-object))
 
+(defmethod add-to-visicon ((anything t)) nil)
+
 (defmethod add-to-visicon ((object visicon-object))
   (with-slots (feature-id visual-location) object
     (setf feature-id (car (add-visicon-features (isa-features object)))
@@ -384,6 +386,12 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
 are in the visicon. This distinction allows to access device objects independly of the fact that they are
 accessible from a visual-location chunk. This functionality separates device modeling from the cognitive model
 interaction with a device."))
+
+(defmethod get-device-object ((uid symbol) (object device-objects))
+  (gethash uid (device-objects object)))
+
+(defmethod (setf get-device-object) (value (uid symbol) (object device-objects))
+  (setf (gethash uid (device-objects object)) value))
 
 (defmethod add-to-visicon ((objects list))
   (dolist (object objects t)
