@@ -403,13 +403,19 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
           visual-location nil)))
 
 (defclass device-objects ()
-  ((device-objects :initarg :htable :initform (make-hash-table) :reader device-objects)
+  ((name :initarg :name)
+   (device-objects :initarg :htable :initform (make-hash-table) :reader device-objects)
    (visicon-objects :initarg :index :initform *visicon-objects* :reader visicon-objects))
   (:documentation 
    "The class holds hash tables for device objects (not necessary in the visicon) and the same objects that
 are in the visicon. This distinction allows to access device objects independly of the fact that they are
 accessible from a visual-location chunk. This functionality separates device modeling from the cognitive model
 interaction with a device."))
+
+(defmethod print-object ((object device-objects) (stream stream))
+  (with-slots (name) object
+    (print-unreadable-object (object stream :type t)
+      (format stream "~S" name))))
 
 (defmethod get-device-object ((uid symbol) (object device-objects))
   (gethash uid (device-objects object)))
