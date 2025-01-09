@@ -22,7 +22,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; 
 ;;; Filename    : visicon-objet.lisp
-;;; Version     : 1.3 (2025-01-08)
+;;; Version     : 1.3.1 (2025-01-09)
 ;;; 
 ;;; Description : The **visicon-object class and methods** is a software module
 ;;;             : designed to work with the ACT-R cognitive architecture, 
@@ -35,6 +35,10 @@
 ;;;             ; values of visicon-object slots.
 ;;; 
 ;;; ----- History (reversed time order) -----
+;;;
+;;; 2025.01.09 Bruno  
+;;;             : Version 1.3.1. Solving issues with modification features list
+;;;               having nil feature value and duplicate features.
 ;;;
 ;;; 2025.01.08 Bruno  
 ;;;             : Version 1.3. New device-objet class for independent device 
@@ -170,6 +174,22 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
 ;;;
 ;;; act-r feature functions interface
 ;;;
+(defun append-features (features other-features)
+  (let ((result features))
+    (do* ((key-values other-features (cddr key-values))
+          (key (first key-values) (first key-values)))
+         ((null key) result)
+      (setf result
+            (if (member key result)
+                result
+              (append result (list key (second key-values))))))))
+
+(let ((f1 '(a 1 b 2 c 3))
+      (f2 '(b 5 d 6)))
+  (assert (equal 
+           '(A 1 B 2 C 3 D 6)
+           (append-features f1 f2))))
+
 (defun default-visual-location-features (visicon-object)
   "Default visual-location features."
   (with-slots (screen-x screen-y width height color value distance visobj-type) visicon-object
@@ -177,12 +197,12 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
             `(screen-y ,screen-y)
             `(width ,width)
             `(height ,height)
-            (when value `(value (,visobj-type ,value)))
-            (when color `(color ,color))          
-            (when distance `(distance ,distance)))))
+            (if value `(value (,visobj-type ,value)) `(value nil))
+            (if color `(color ,color) `(color nil))          
+            (if distance `(distance ,distance) `(distance nil)))))
 
 (let ((vo (make-instance 'visicon-object)))
-  (assert (equal '(SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1)
+  (assert (equal '(SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1 VALUE NIL COLOR NIL DISTANCE NIL)
                  (default-visual-location-features vo))))
 
 (defun vo-visual-features (visicon-object)
@@ -191,8 +211,9 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
       (dolist (slot visual-features features)
         (setf features 
               (append features 
-                      (list slot 
-                            (slot-value visicon-object slot))))))))
+                      (when (slot-value visicon-object slot)
+                        (list slot 
+                              (slot-value visicon-object slot)))))))))
 
 (defun visual-location-features (visicon-object)
   (with-slots (visual-location-features) visicon-object
@@ -200,8 +221,9 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
       (dolist (slot visual-location-features features)
         (setf features 
               (append features 
-                      (list slot 
-                            (list (slot-value visicon-object slot) nil))))))))
+                      (when (slot-value visicon-object slot)
+                        (list slot 
+                            (list (slot-value visicon-object slot) nil)))))))))
 
 (defun visual-object-features (visicon-object)
   (with-slots (visual-object-features) visicon-object
@@ -209,27 +231,30 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
       (dolist (slot visual-object-features features)
         (setf features 
               (append features 
-                      (list slot 
-                            (list nil (slot-value visicon-object slot)))))))))
+                      (when (slot-value visicon-object slot)
+                        (list slot 
+                              (list nil (slot-value visicon-object slot))))))))))
+
+(defun combined-features (visicon-object)
+  (let ((combined-features (default-visual-location-features visicon-object)))
+    (dolist (features (list (vo-visual-features visicon-object)
+                            (visual-location-features visicon-object)
+                            (visual-object-features visicon-object)
+                            ) 
+                      combined-features)
+      (setf combined-features (append-features combined-features features)))))
+
 
 (defun isa-features (visicon-object)
-  (append
-   (features-chunk-types visicon-object)
-   (default-visual-location-features visicon-object)
-   (vo-visual-features visicon-object)
-   (visual-location-features visicon-object)
-   (visual-object-features visicon-object)))
+  (append (features-chunk-types visicon-object)
+          (combined-features visicon-object)))
 
 (defun modification-features-list (visicon-object)
-  (append
-   (list (feature-id visicon-object))
-   (default-visual-location-features visicon-object)
-   (vo-visual-features visicon-object)
-   (visual-location-features visicon-object)
-   (visual-object-features visicon-object)))
+  (append (list (feature-id visicon-object))
+          (combined-features visicon-object)))
 
 (let ((vo (make-instance 'visicon-object)))
-  (assert (equal '(ISA VISUAL-LOCATION SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1)
+  (assert (equal '(ISA VISUAL-LOCATION SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1 VALUE NIL COLOR NIL DISTANCE NIL)
                  (isa-features vo))))
 ;;;
 ;;; act-r chunk-type and chunk functions interface
@@ -364,8 +389,9 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
 (defmethod add-to-visicon ((object visicon-object))
   (with-slots (feature-id visual-location) object
     (setf feature-id (car (add-visicon-features (isa-features object)))
-          visual-location (chunk-visual-loc feature-id)
-          (get-visicon-object visual-location) object)))
+          visual-location (chunk-visual-loc feature-id))
+    (when visual-location
+      (setf (get-visicon-object visual-location) object))))
 
 (defmethod modify-visicon ((object visicon-object))
   (modify-visicon-features 
@@ -476,16 +502,25 @@ interaction with a device."))
     (setf (x vo1) 10)
     (modify-visicon vo1)
     (run-n-events 3)
+    (setf (x vo1) 30)
+    (modify-visicon vo1)
     (print-visicon)
 
     (format t "DELETE FROM VISICON~%")
-    (delete-from-visicon vo1)
+    (delete-from-visicon vo2)
     (run-n-events 3)
     (print-visicon)
 
     ;; Action on a visicon-object using the 
     ;; visual-location as a key
     (say-square (visual-location square))
+
+
+    (setf (x square) 10)
+    (modify-visicon square)
+    (run-n-events 3)
+
+    (values vo1 vo2 square)
 
     ))
 
