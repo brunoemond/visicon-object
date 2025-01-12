@@ -80,6 +80,10 @@
 ;;; (run-demo)
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defparameter *visicon-objects* (make-hash-table)
+  "A hash table to map visual-location names to visicon-object instances.")
+
 (defparameter *actr-pixels/inch* 72
   "Value for the :pixels/inch parameter.")
 
@@ -396,8 +400,6 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
 ;;; The methods provide an interface to ACT-R visual features functions. 
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defparameter *visicon-objects* (make-hash-table)
-  "A hash table to map visual-location names to visicon-object instances.")
 
 (defun clear-visicon-objects ()
   (clrhash *visicon-objects*))
@@ -418,6 +420,18 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
     (when visual-location
       (setf (get-visicon-object visual-location) object))))
 
+(defmethod add-to-visicon ((visicon-objects list))
+  (dolist (visicon-object visicon-objects t)
+    (add-to-visicon visicon-object)))
+
+(defmethod add-to-visicon ((object hash-table))
+  (maphash 
+   (lambda (uid visicon-object)
+     (declare (ignore uid))
+     (add-to-visicon visicon-object))
+   object)
+  object)
+
 (defmethod modify-visicon ((object visicon-object))
   (modify-visicon-features 
    (modification-features-list object)))
@@ -428,6 +442,18 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
     (remhash visual-location *visicon-objects*)
     (setf feature-id nil
           visual-location nil)))
+
+(defmethod delete-from-visicon ((objects list))
+  (dolist (object objects t)
+    (delete-from-visicon object)))
+
+(defmethod delete-from-visicon ((object hash-table))
+  (maphash 
+   (lambda (uid visicon-object)
+     (declare (ignore uid))
+     (delete-from-visicon visicon-object))
+   object)
+  object)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -462,21 +488,11 @@ interaction with a device."))
   (dolist (visicon-object visicon-object-list (device-objects device-objects))
     (setf (get-device-object (uid visicon-object) device-objects) visicon-object)))
 
-(defmethod add-to-visicon ((objects list))
-  (dolist (object objects t)
-    (add-to-visicon object)))
-
-(defmethod delete-from-visicon ((objects list))
-  (dolist (object objects t)
-    (delete-from-visicon object)))
-
 (defmethod add-to-visicon ((object device-objects))
-  (maphash 
-   (lambda (key value)
-     (declare (ignore key))
-     (add-to-visicon value))
-   (device-objects object))
-  object)
+  (add-to-visicon (device-objects object)))
+
+(defmethod delete-from-visicon ((object device-objects))
+  (delete-from-visicon (device-objects object)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;              
 ;; Define a class that inherits from visicon-object
