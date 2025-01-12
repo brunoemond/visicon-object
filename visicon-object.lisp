@@ -22,7 +22,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; 
 ;;; Filename    : visicon-objet.lisp
-;;; Version     : 1.3.1 (2025-01-09)
+;;; Version     : 1.3.2 (2025-01-11)
 ;;; 
 ;;; Description : The **visicon-object class and methods** is a software module
 ;;;             : designed to work with the ACT-R cognitive architecture, 
@@ -35,6 +35,10 @@
 ;;;             ; values of visicon-object slots.
 ;;; 
 ;;; ----- History (reversed time order) -----
+;;;
+;;; 2025.01.11 Bruno  
+;;;             : Version 1.3.2. Combining the calls visual-location-chunk-type and
+;;;               visual-object-chunk-type into one: visicon-object-chunk-types (class-name)
 ;;;
 ;;; 2025.01.09 Bruno  
 ;;;             : Version 1.3.1. Solving issues with modification features list
@@ -454,6 +458,10 @@ interaction with a device."))
   (when (visual-object-type class-name)
     (apply #'chunk-type-fct
            (list (visual-object-chunk-type-spec class-name)))))
+
+(defun visicon-object-chunk-types (class-name)
+  (visual-location-chunk-type class-name)
+  (visual-object-chunk-type class-name))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;              
 ;; Define a class that inherits from visicon-object
