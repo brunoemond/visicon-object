@@ -406,6 +406,12 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
     (setf feature-id nil
           visual-location nil)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; device-objects 
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defclass device-objects ()
   ((name :initarg :name)
    (device-objects :initarg :htable :initform (make-hash-table) :reader device-objects)
@@ -417,9 +423,11 @@ accessible from a visual-location chunk. This functionality separates device mod
 interaction with a device."))
 
 (defmethod print-object ((object device-objects) (stream stream))
-  (with-slots (name) object
+  (with-slots (name device-objects visicon-objects) object
     (print-unreadable-object (object stream :type t)
-      (format stream "~S" name))))
+      (format stream "~S :device ~S :visicon ~S" name 
+              (hash-table-count device-objects) 
+              (hash-table-count visicon-objects)))))
 
 (defmethod get-device-object ((uid symbol) (object device-objects))
   (gethash uid (device-objects object)))
