@@ -72,8 +72,10 @@
 ;;; (delete-from-visicon list-of-visicon-objects)
 ;;;
 ;;; *** chunk-type definition methods ***
-;;; (visual-location-chunk-type class-name)
-;;; (visual-object-chunk-type class-name)
+;;; (visicon-object-chunk-types class-name)
+;;;
+;;; *** to do ***
+;;; A function to define chunks used by a visicon-object
 ;;;
 ;;; (run-demo)
 ;;;
@@ -340,8 +342,29 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
                  (visual-object-chunk-type-spec 'square)))
   (unintern 'square))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
-;;; visicon-object chunks
+;;; Methods to define sub-types of visual-location and visual-object types.
+;;; The methods provide an interface to ACT-R chunk-type function. 
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defun visual-location-chunk-type (class-name)
+  (when (visual-location-type class-name)
+    (apply #'chunk-type-fct
+           (list (visual-location-chunk-type-spec class-name)))))
+
+(defun visual-object-chunk-type (class-name)
+  (when (visual-object-type class-name)
+    (apply #'chunk-type-fct
+           (list (visual-object-chunk-type-spec class-name)))))
+
+(defun visicon-object-chunk-types (class-name)
+  (visual-location-chunk-type class-name)
+  (visual-object-chunk-type class-name))
+
+;;;
+;;; visicon-object chunks (in progress) 
 ;;;
 (defmethod has-slot-p ((object visicon-object) slot-name)
   (find slot-name
@@ -411,7 +434,6 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
 ;;; device-objects 
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 (defclass device-objects ()
   ((name :initarg :name)
    (device-objects :initarg :htable :initform (make-hash-table) :reader device-objects)
@@ -432,8 +454,13 @@ interaction with a device."))
 (defmethod get-device-object ((uid symbol) (object device-objects))
   (gethash uid (device-objects object)))
 
-(defmethod (setf get-device-object) (value (uid symbol) (object device-objects))
+(defmethod (setf get-device-object) ((value visicon-object) (uid symbol) (object device-objects))
   (setf (gethash uid (device-objects object)) value))
+
+(defmethod (setf get-device-object) ((visicon-object-list list) uid (device-objects device-objects))
+  (declare (ignore uid))
+  (dolist (visicon-object visicon-object-list (device-objects device-objects))
+    (setf (get-device-object (uid visicon-object) device-objects) visicon-object)))
 
 (defmethod add-to-visicon ((objects list))
   (dolist (object objects t)
@@ -450,26 +477,6 @@ interaction with a device."))
      (add-to-visicon value))
    (device-objects object))
   object)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
-;;; Methods to define sub-types of visual-location and visual-object types.
-;;; The methods provide an interface to ACT-R chunk-type function. 
-;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defun visual-location-chunk-type (class-name)
-  (when (visual-location-type class-name)
-    (apply #'chunk-type-fct
-           (list (visual-location-chunk-type-spec class-name)))))
-
-(defun visual-object-chunk-type (class-name)
-  (when (visual-object-type class-name)
-    (apply #'chunk-type-fct
-           (list (visual-object-chunk-type-spec class-name)))))
-
-(defun visicon-object-chunk-types (class-name)
-  (visual-location-chunk-type class-name)
-  (visual-object-chunk-type class-name))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;              
 ;; Define a class that inherits from visicon-object
@@ -490,7 +497,6 @@ interaction with a device."))
 (defmethod say-square ((object symbol))
   (say-square (get-visicon-object object)))
 
-
 (defun run-demo ()
 
   (clear-visicon-objects)
@@ -506,8 +512,7 @@ interaction with a device."))
     (clear-all)
     (define-model test
       ;; visual-location and object chunk-types definition
-      (visual-location-chunk-type 'square)
-      (visual-object-chunk-type 'square)
+      (visicon-object-chunk-types 'square)
       (define-chunks square true)
       ;(visicon-object-chunks square '(kind sides))
       )
