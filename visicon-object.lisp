@@ -136,8 +136,8 @@ cognitive simulations."))
               (hash-table-count device-objects) 
               (hash-table-count objects-in-visicon)))))
 
-(defun make-device (&key (name 'some-device) (class-name 'device))
-  (apply #'make-instance (list class-name :name name)))
+(defun make-device (&key (name 'some-device) (class 'device))
+  (apply #'make-instance (list class :name name)))
 
 ;;;
 ;;; device-objects
@@ -208,9 +208,9 @@ explicitly provided when creating an object instance. This parameter is converte
 ACT-R (e.g. 15×72=1080).  Attributes such as 'screen-pos, 'size', 'status', and 'kind' are computed 
 by ACT-R at runtime."))
 
-(defun make-visicon-object (class device &rest initargs)
+(defun make-visicon-object (class-name device &rest initargs)
   (if (typep device 'device)
-      (apply #'make-instance (append (list class :device device) initargs))
+      (apply #'make-instance (append (list class-name :device device) initargs))
     (error "~S is not a device." device)))
 
 (defmethod initialize-instance :after ((object visicon-object) &rest initargs &key &allow-other-keys)
@@ -373,7 +373,8 @@ by ACT-R at runtime."))
 (defun visual-chunk-type-slots (class-name)
   (let ((class (find-class class-name)))
     (when class
-      (append (cadr (slot-definition-initform
+      (append '(device)
+              (cadr (slot-definition-initform
                      (find 'visual-features (class-slots class)
                            :key #'slot-definition-name)))
               (cadadr (assoc :visual-features 
@@ -423,9 +424,9 @@ by ACT-R at runtime."))
   (assert (equal 'visual-location (visual-location-type 'visicon-object)))
   (assert (equal 'visual-object (visual-object-type 'visicon-object)))
   (assert (equal 'square (visual-object-type 'square)))
-  (assert (equal '((SQUARE-FEATURES (:INCLUDE VISUAL-LOCATION)) REGULAR)
+  (assert (equal '((SQUARE-FEATURES (:INCLUDE VISUAL-LOCATION)) DEVICE REGULAR)
                  (visual-location-chunk-type-spec 'square)))
-  (assert (equal '((SQUARE (:INCLUDE VISUAL-OBJECT)) SIDES)
+  (assert (equal '((SQUARE (:INCLUDE VISUAL-OBJECT)) DEVICE SIDES)
                  (visual-object-chunk-type-spec 'square)))
   (unintern 'square))
 
