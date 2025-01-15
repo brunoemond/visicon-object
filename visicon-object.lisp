@@ -22,7 +22,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; 
 ;;; Filename    : visicon-objet.lisp
-;;; Version     : 1.3.2 (2025-01-11)
+;;; Version     : 1.4 (2025-01-15)
 ;;; 
 ;;; Description : The **visicon-object class and methods** is a software module
 ;;;             : designed to work with the ACT-R cognitive architecture, 
@@ -31,10 +31,17 @@
 ;;; 
 ;;; Bugs        : 
 ;;;
-;;; To do       : A function that would define chunks for symbols created as slot 
-;;;             ; values of visicon-object slots.
+;;; To do       : 
 ;;; 
 ;;; ----- History (reversed time order) -----
+;;;
+;;; 2025.01.15 Bruno  
+;;;             : Version 1.4. Automatic chunk definitions for visicon-object slot values
+;;;               when added to the visicon to avoid warnings about chunk creation when
+;;;               running a model. Integration of a device instance to visicon-object instances.
+;;;               Visicon-object that are added to the visicon are now stored in the device
+;;;               instead of a the general parameter *visicon-objects*. The creation of a 
+;;;               visicon object now requires a device object. 
 ;;;
 ;;; 2025.01.11 Bruno  
 ;;;             : Version 1.3.2. Combining the calls visual-location-chunk-type and
@@ -61,10 +68,19 @@
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
-;;; The software includes the visicon-object class which support the definition
-;;; of custom objects that will be represented in the visicon. 
+;;; The software includes the device and visicon-object classes. The latter supports
+;;; the definition of custom objects that will be represented in the visicon.
 ;;; 
+;;; *** device methods ***
+;;; (make-device (&optional name))
+;;; 
+;;; *** device-object methods ***
+;;; (make-visicon-object (class device &rest initargs))
+;;; (get-device-object uid device)
+;;; (setf (get-device-object uid device) device-object)
+;;;
 ;;; *** visicon methods ***
+;;; (get-visicon-object visual-location device)
 ;;; (add-to-visicon visicon-object)
 ;;; (add-to-visicon list-of-visicon-objects)
 ;;; (modify-visicon visicon-object)
@@ -74,15 +90,14 @@
 ;;; *** chunk-type definition methods ***
 ;;; (visicon-object-chunk-types class-name)
 ;;;
-;;; *** to do ***
-;;; A function to define chunks used by a visicon-object
+;;; *** demo ***
 ;;;
-;;; (run-demo)
+;;; (device-demo)
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defparameter *visicon-objects* (make-hash-table)
-  "A hash table to map visual-location names to visicon-object instances.")
+  "A hash table to map visual-location names to visicon-object instances for all devices.")
 
 (defparameter *actr-pixels/inch* 72
   "Value for the :pixels/inch parameter.")
@@ -98,19 +113,69 @@
   (floor (* (/ centimeters *cm/inch*) 
             *actr-pixels/inch*)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; device 
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defclass device ()
+  ((name :initarg :name :initform 'some-device :type symbol :reader name)
+   (device-objects :initform (make-hash-table) :reader device-objects)
+   (objects-in-visicon :initform (make-hash-table) :reader objects-in-visicon))
+  (:documentation 
+   "The device class manages hash tables for device objects, whether or not they are included 
+in the ACT-R visicon. It also maintains an index to these objects by their visual-location chunk, 
+if they have been added to the visicon. By separating device modeling from the cognitive model's 
+interaction with a device, this design streamlines the integration of device objects into 
+cognitive simulations."))
+
+(defmethod print-object ((device device) (stream stream))
+  (with-slots (name device-objects objects-in-visicon) device
+    (print-unreadable-object (device stream :type t)
+      (format stream "~S :device-objects ~S :visicon ~S" name 
+              (hash-table-count device-objects) 
+              (hash-table-count objects-in-visicon)))))
+
+(defun make-device (&optional (name 'some-device))
+  (make-instance 'device :name name))
+
+;;;
+;;; device-objects
+;;;
+(defmethod get-device-object ((uid symbol) (device device))
+  (gethash uid (device-objects device)))
+
+(defun isa-visicon-object (object)
+  (if (typep object 'visicon-object)
+      t (error "Object ~S isa not a visicon-object." object)))
+
+(defmethod (setf get-device-object) (visicon-object (uid symbol) (device device))
+  (if (and (isa-visicon-object visicon-object) (equal (uid visicon-object) uid))
+      (setf (gethash uid (device-objects device)) visicon-object)
+    (error "uid value ~S and uid slot value ~S of object ~S are not equal." 
+           uid (uid visicon-object) visicon-object)))
+
+(defmethod (setf get-device-object) ((visicon-objects list) uid (device device))
+  (declare (ignore uid))
+  (dolist (visicon-object visicon-objects (device-objects device))
+    (setf (get-device-object (uid visicon-object) device) visicon-object)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; visicon-object 
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defclass visicon-object ()
-  ((uid :initarg :uid :reader uid)
-   (screen-x :initform 0 :initarg :screen-x)
-   (screen-y :initform 0 :initarg :screen-y)
-   (distance :initform nil :initarg :distance)
-   (width :initform 1 :initarg :width :accessor width)
-   (height :initform 1 :initarg :height :accessor height)
-   (color :initform nil :initarg :color :accessor color)
-   (value :initform nil :initarg :value :accessor value)
+  ((uid :initarg :uid :type symbol :reader uid
+        :documentation "A unique identifier for the visicon-object, used as the hash key.")
+   (device :initarg :device :type devive :reader device
+           :documentation "The device containing the visicon-object.")
+   (device-name :type symbol :reader device-name
+           :documentation "The device name computed wne initializing the object.")
    (visloc-type :initform 'visual-location :initarg :visloc-type
-                :documentation "The visual-location type used in the add-visicon-features command.")
+                :documentation "The visual-location type used in the act-r add-visicon-features command.")
    (visobj-type :initform 'visual-object :initarg :visobj-type
-                :documentation "The visual-object type used in the add-visicon-features command.")
+                :documentation "The visual-object type used in the act-r add-visicon-features command.")
    (visual-features :initform nil :initarg :visual-features
                     :documentation "List of slots shared by visual-location and visual-object features.")
    (visual-location-features :initform nil :initarg :visual-location-features
@@ -121,6 +186,14 @@
                :documentation "The feature id returned by the add-visicon-features command.")
    (visual-location :initform nil :reader visual-location
                     :documentation "The name of the visual-location chunk for the visicon feature.")
+   ;; Act-r visual-location and visual-object slots
+   (screen-x :initform 0 :initarg :screen-x)
+   (screen-y :initform 0 :initarg :screen-y)
+   (distance :initform nil :initarg :distance)
+   (width :initform 1 :initarg :width :accessor width)
+   (height :initform 1 :initarg :height :accessor height)
+   (color :initform nil :initarg :color :accessor color)
+   (value :initform nil :initarg :value :accessor value)
    (screen-pos :initform nil)
    (kind :initform nil)
    (status :initform nil)
@@ -130,15 +203,22 @@
 It includes slots used by the follwoing ACT-R chunk types:
 visual-location: (screen-x, screen-y, distance, kind, color, value, height, width, size)
 visual-object: (screen-pos, value, status, color, height, width)
-The distance attribute defaults to the value specified by the ACT-R :viewing-distance parameter if not explicitly provided when creating an object instance. This parameter is converted into pixels by ACT-R (e.g. 15×72=1080).
-The attribute 'kind' is included in a visicon entry for an instance only if the 'value' attribute is not NIL. 
-Attributes such as 'size' and 'status' are computed automatically by ACT-R at runtime."))
+The distance attribute defaults to the value specified by the ACT-R :viewing-distance parameter if not
+explicitly provided when creating an object instance. This parameter is converted into pixels by 
+ACT-R (e.g. 15×72=1080).  Attributes such as 'screen-pos, 'size', 'status', and 'kind' are computed 
+by ACT-R at runtime."))
+
+(defun make-visicon-object (class device &rest initargs)
+  (if (typep device 'device)
+      (apply #'make-instance (append (list class :device device) initargs))
+    (error "~S is not a device." device)))
 
 (defmethod initialize-instance :after ((object visicon-object) &rest initargs &key &allow-other-keys)
-  (with-slots (screen-x screen-y distance) object
+  (with-slots (device device-name screen-x screen-y distance) object
     (let ((x (getf initargs :x))
           (y (getf initargs :y))
           (z (getf initargs :z)))
+      (setf device-name (name device))
       (when x (setf screen-x x))
       (when y (setf screen-y y))
       (when z (setf distance z)))))
@@ -174,8 +254,9 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
         `(isa ,visloc-type)
       `(isa (,visloc-type ,visobj-type)))))
 
-(let ((vo1 (make-instance 'visicon-object))
-      (vo2 (make-instance 'visicon-object :visloc-type 'vis-loc :visobj-type 'vis-obj)))
+(let* ((device (make-device))
+      (vo1 (make-visicon-object 'visicon-object device))
+      (vo2 (make-visicon-object 'visicon-object device :visloc-type 'vis-loc :visobj-type 'vis-obj)))
   (assert (equal '(ISA VISUAL-LOCATION)
                  (features-chunk-types vo1)))
   (assert (equal '(isa (vis-loc vis-obj))
@@ -211,19 +292,9 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
             (when color `(color ,color))          
             (when distance `(distance ,distance)))))
 
-(let ((vo (make-instance 'visicon-object)))
+(let ((vo (make-instance 'visicon-object :device (make-device))))
   (assert (equal '(SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1)
                  (default-visual-location-features vo))))
-
-(defun vo-visual-features (visicon-object)
-  (with-slots (visual-features) visicon-object
-    (let (features)
-      (dolist (slot visual-features features)
-        (setf features 
-              (append features 
-                      (when (slot-value visicon-object slot)
-                        (list slot 
-                              (slot-value visicon-object slot)))))))))
 
 (defun visual-location-features (visicon-object)
   (with-slots (visual-location-features) visicon-object
@@ -245,9 +316,21 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
                         (list slot 
                               (list nil (slot-value visicon-object slot))))))))))
 
+(defun visual-location-object-features (visicon-object)
+  (with-slots (visual-features) visicon-object
+    (let (features)
+      (dolist (slot visual-features 
+                    (append `(device ,(name (device visicon-object)))
+                            features))
+        (setf features 
+              (append features 
+                      (when (slot-value visicon-object slot)
+                        (list slot 
+                              (slot-value visicon-object slot)))))))))
+
 (defun combined-features (visicon-object)
   (let ((combined-features (default-visual-location-features visicon-object)))
-    (dolist (features (list (vo-visual-features visicon-object)
+    (dolist (features (list (visual-location-object-features visicon-object)
                             (visual-location-features visicon-object)
                             (visual-object-features visicon-object)) 
                       combined-features)
@@ -261,8 +344,8 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
   (append (list (feature-id visicon-object))
           (combined-features visicon-object)))
 
-(let ((vo (make-instance 'visicon-object)))
-  (assert (equal '(ISA VISUAL-LOCATION SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1)
+(let ((vo (make-instance 'visicon-object :device (make-device))))
+  (assert (equal '(ISA VISUAL-LOCATION SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1 DEVICE SOME-DEVICE)
                  (isa-features vo))))
 ;;;
 ;;; act-r chunk-type and chunk functions interface
@@ -346,13 +429,14 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
                  (visual-object-chunk-type-spec 'square)))
   (unintern 'square))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
-;;; Methods to define sub-types of visual-location and visual-object types.
 ;;; The methods provide an interface to ACT-R chunk-type function. 
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; chunk-types
+;;;
 (defun visual-location-chunk-type (class-name)
   (when (visual-location-type class-name)
     (apply #'chunk-type-fct
@@ -363,139 +447,99 @@ Attributes such as 'size' and 'status' are computed automatically by ACT-R at ru
     (apply #'chunk-type-fct
            (list (visual-object-chunk-type-spec class-name)))))
 
-(defun visicon-object-chunk-types (class-name)
+(defun visicon-object-chunk-types-fct (class-name)
   (visual-location-chunk-type class-name)
   (visual-object-chunk-type class-name))
 
+(defmacro visicon-object-chunk-types (class-name)
+  `(visicon-object-chunk-types-fct ',class-name))
+
 ;;;
-;;; visicon-object chunks (in progress) 
+;;; chunks
 ;;;
-(defmethod has-slot-p ((object visicon-object) slot-name)
-  (find slot-name
-        (mapcar #'slot-definition-name
-                (class-slots (class-of object)))
-        :test #'eq))
+(defun chunk-slots (visicon-object)
+  (with-slots (visual-features visual-location-features 
+                         visual-object-features) visicon-object
+    (append '(device-name uid visloc-type visobj-type) visual-features visual-location-features 
+            visual-object-features)))
 
-(defmethod collect-symbol-values ((object visicon-object) (slot-name symbol))
-  (when (and (has-slot-p object slot-name)
-             (slot-boundp object slot-name))
-    (let ((slot-value (slot-value object slot-name)))
-      (when (and slot-value 
-                 (symbolp slot-value))
-        (list slot-value)))))
-
-(defmethod collect-symbol-values ((object visicon-object) (slot-names list))
-  (let (chunk-names)
-    (dolist (slot-name slot-names chunk-names)
-      (setf chunk-names
-            (append chunk-names (collect-symbol-values object slot-name))))))
-
-(defun visicon-object-chunks (visicon-object slot-names)
-  (define-chunks-fct (collect-symbol-values visicon-object slot-names)))
-
+(defun chunk-names (visicon-object)
+  (let ((slots (chunk-slots visicon-object))
+        chunk-names)
+    (dolist (slot slots chunk-names)
+      (when (and (slot-boundp visicon-object slot)
+                 (symbolp (slot-value visicon-object slot)))
+        (setf chunk-names
+              (adjoin (slot-value visicon-object slot) chunk-names))))))
+        
+(defun define-visicon-object-chunks (visicon-object)
+  (let (chunks)
+    (dolist (chunk-name (chunk-names visicon-object) chunks)
+      (unless (chunk-p-fct chunk-name)
+        (setf chunks (append chunks (define-chunks-fct (list chunk-name))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
-;;; Methods to add, modify and delete a visicon entry.
-;;; The methods provide an interface to ACT-R visual features functions. 
+;;; device: objects-in-visicon 
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defmethod get-visicon-object ((visual-location symbol) (device device))
+  (gethash visual-location (objects-in-visicon device)))
 
-(defun clear-visicon-objects ()
-  (clrhash *visicon-objects*))
-
-(defmethod get-visicon-object ((visual-location symbol))
-  (gethash visual-location *visicon-objects*))
-
-(defmethod (setf get-visicon-object) ((visicon-object visicon-object) (visual-location symbol))
-  (setf (gethash visual-location *visicon-objects*)
+(defmethod (setf get-visicon-object) ((visicon-object visicon-object) (visual-location symbol) (device device))
+  (setf (gethash visual-location (objects-in-visicon device))
         visicon-object))
 
 (defmethod add-to-visicon ((anything t)) nil)
 
-(defmethod add-to-visicon ((object visicon-object))
-  (with-slots (feature-id visual-location) object
-    (setf feature-id (car (add-visicon-features (isa-features object)))
+(defmethod add-to-visicon ((visicon-object visicon-object))
+  (define-visicon-object-chunks visicon-object)
+  (with-slots (feature-id visual-location) visicon-object
+    (setf feature-id (car (add-visicon-features (isa-features visicon-object)))
           visual-location (chunk-visual-loc feature-id))
     (when visual-location
-      (setf (get-visicon-object visual-location) object))))
+      (setf (get-visicon-object visual-location (device visicon-object)) visicon-object))))
 
-(defmethod add-to-visicon ((visicon-objects list))
-  (dolist (visicon-object visicon-objects t)
-    (add-to-visicon visicon-object)))
-
-(defmethod add-to-visicon ((object hash-table))
+(defmethod add-to-visicon ((device device))
   (maphash 
    (lambda (uid visicon-object)
      (declare (ignore uid))
      (add-to-visicon visicon-object))
-   object)
-  object)
+   (device-objects device))
+  device)
 
-(defmethod modify-visicon ((object visicon-object))
+(defmethod modify-visicon ((visicon-object visicon-object))
+  (define-visicon-object-chunks visicon-object)
   (modify-visicon-features 
-   (modification-features-list object)))
+   (modification-features-list visicon-object)))
 
-(defmethod delete-from-visicon ((object visicon-object))
-  (with-slots (feature-id visual-location) object 
+(defmethod delete-from-visicon ((visicon-object visicon-object))
+  (with-slots (feature-id visual-location) visicon-object 
     (delete-visicon-features feature-id)
-    (remhash visual-location *visicon-objects*)
+    (remhash visual-location (objects-in-visicon (device visicon-object)))
     (setf feature-id nil
           visual-location nil)))
 
-(defmethod delete-from-visicon ((objects list))
-  (dolist (object objects t)
-    (delete-from-visicon object)))
+(defmethod delete-from-visicon ((visicon-objects list))
+  (dolist (visicon-object visicon-objects t)
+    (delete-from-visicon visicon-object)))
 
-(defmethod delete-from-visicon ((object hash-table))
+(defmethod delete-from-visicon ((device device))
   (maphash 
-   (lambda (uid visicon-object)
-     (declare (ignore uid))
+   (lambda (visual-location visicon-object)
+     (declare (ignore visual-location))
      (delete-from-visicon visicon-object))
-   object)
-  object)
+   (objects-in-visicon device))
+  device)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
-;;; device-objects 
-;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defclass device-objects ()
-  ((name :initarg :name)
-   (device-objects :initarg :htable :initform (make-hash-table) :reader device-objects)
-   (visicon-objects :initarg :index :initform *visicon-objects* :reader visicon-objects))
-  (:documentation 
-   "The class holds hash tables for device objects (not necessary in the visicon) and the same objects that
-are in the visicon. This distinction allows to access device objects independly of the fact that they are
-accessible from a visual-location chunk. This functionality separates device modeling from the cognitive model
-interaction with a device."))
-
-(defmethod print-object ((object device-objects) (stream stream))
-  (with-slots (name device-objects visicon-objects) object
-    (print-unreadable-object (object stream :type t)
-      (format stream "~S :device ~S :visicon ~S" name 
-              (hash-table-count device-objects) 
-              (hash-table-count visicon-objects)))))
-
-(defmethod get-device-object ((uid symbol) (object device-objects))
-  (gethash uid (device-objects object)))
-
-(defmethod (setf get-device-object) ((value visicon-object) (uid symbol) (object device-objects))
-  (setf (gethash uid (device-objects object)) value))
-
-(defmethod (setf get-device-object) ((visicon-object-list list) uid (device-objects device-objects))
-  (declare (ignore uid))
-  (dolist (visicon-object visicon-object-list (device-objects device-objects))
-    (setf (get-device-object (uid visicon-object) device-objects) visicon-object)))
-
-(defmethod add-to-visicon ((object device-objects))
-  (add-to-visicon (device-objects object)))
-
-(defmethod delete-from-visicon ((object device-objects))
-  (delete-from-visicon (device-objects object)))
+(defun clear-visicon-objects (device)
+  (delete-from-visicon device))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;              
 ;; Define a class that inherits from visicon-object
+(defparameter *device-demo*
+  (make-device 'device-demo))
+
 (defclass square (visicon-object)
   ((sides :initform 4 :reader sides)
    (regular :initform 'true :reader regular))
@@ -507,35 +551,35 @@ interaction with a device."))
    :visual-location-features '(regular)
    :visual-object-features '(sides)))
 
-(defmethod say-square ((object square))
-    (format t "SQUARE~%"))
+(defun add-objects-to-device-example (objects)
+  (setf (get-device-object t *device-demo*) objects))
 
-(defmethod say-square ((object symbol))
-  (say-square (get-visicon-object object)))
+(add-objects-to-device-example
+ (list (make-instance 'visicon-object :device *device-demo* :uid 'uid1) 
+       (make-instance 'visicon-object :device *device-demo* :uid 'uid2)
+       (make-instance 'square :device *device-demo* :uid 'square :x 30 :y 30)))
 
-(defun run-demo ()
+(defun device-demo ()
 
-  (clear-visicon-objects)
+  (echo-act-r-output)
 
-  ;; create instances
-  (let ((vo1 (make-instance 'visicon-object))
-        (vo2 (make-instance 'visicon-object :x 20 :y 20 :z (cm->pixels 40)))
-        (square (make-instance 'square :x 30 :y 30)))
+  (clear-visicon-objects *device-demo*)
 
-    (echo-act-r-output)
+  (clear-all)
 
-    ;; define a model
-    (clear-all)
-    (define-model test
-      ;; visual-location and object chunk-types definition
-      (visicon-object-chunk-types 'square)
-      (define-chunks square true)
-      ;(visicon-object-chunks square '(kind sides))
-      )
+  (define-model device-demo
+    (visicon-object-chunk-types square))
+
+  (let ((vo1 (get-device-object 'uid1 *device-demo*))
+        (vo2 (get-device-object 'uid2 *device-demo*)))
 
     ;; example for visicon methods
+    (format t "EMPTY VISICON~%")
+
+    (print-visicon)
+
     (format t "ADD TO VISICON~%")
-    (add-to-visicon (list vo1 vo2 square))
+    (add-to-visicon *device-demo*)
     (run-n-events 3)
     (print-visicon)
 
@@ -551,18 +595,6 @@ interaction with a device."))
     (delete-from-visicon vo2)
     (run-n-events 3)
     (print-visicon)
-
-    ;; Action on a visicon-object using the 
-    ;; visual-location as a key
-    (say-square (visual-location square))
-
-
-    (setf (x square) 10)
-    (modify-visicon square)
-    (run-n-events 3)
-
-    (values vo1 vo2 square)
-
     ))
 
 :eof
