@@ -72,7 +72,7 @@
 ;;; the definition of custom objects that will be represented in the visicon.
 ;;; 
 ;;; *** device methods ***
-;;; (make-device (&optional name))
+;;; (make-device (&key name class-name))
 ;;; 
 ;;; *** device-object methods ***
 ;;; (make-visicon-object (class device &rest initargs))
@@ -136,8 +136,8 @@ cognitive simulations."))
               (hash-table-count device-objects) 
               (hash-table-count objects-in-visicon)))))
 
-(defun make-device (&optional (name 'some-device))
-  (make-instance 'device :name name))
+(defun make-device (&key (name 'some-device) (class-name 'device))
+  (apply #'make-instance (list class-name :name name)))
 
 ;;;
 ;;; device-objects
@@ -538,7 +538,7 @@ by ACT-R at runtime."))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;              
 ;; Define a class that inherits from visicon-object
 (defparameter *device-demo*
-  (make-device 'device-demo))
+  (make-device :name 'device-demo))
 
 (defclass square (visicon-object)
   ((sides :initform 4 :reader sides)
