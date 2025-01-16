@@ -4,6 +4,13 @@
 ;;; the visicon, and that those changes automatically trigger an update
 ;;; by the vision module.
 
+
+;;; MODIFIED CODE
+;;; Definition of a device instance to hold visicon-objects. 
+(defparameter *figures* 
+  (make-instance 'device :name 'figures))
+
+;;; A visicon-object class (see class :documentation)
 (defclass polygon (visicon-object)
   ((regular :initarg :regular :accessor regular)
    (sides :initarg :sides :accessor sides))
@@ -16,11 +23,32 @@
    "The polygon class inherits from the visicon-object class. 
 Additional slots (regular and sides) are added to match the original example.
 The slots are specified as being either visual-location or visual-object features.
-Also, the visual-location (:visloc-type) and object (:visobj-type) types will be used for the creation of visicon chunks."
-   ))
+Also, the visual-location (:visloc-type) and object (:visobj-type) types will be used for the creation of visicon chunks."))
+
+;;; Adding vision-objects to the *figures* device  
+(setf (get-device-object t *figures*)
+      (list (make-instance
+             'polygon :x 0 :y 50
+             :uid 'polygon1
+             :device *figures*
+             :value '(polygon "poly1")
+             :height 20 :width 40
+             :color 'blue :regular 'false
+             :sides 7)
+            (make-instance
+             'polygon :x 50 :y 70
+             :uid 'polygon2
+             :device *figures*
+             :value '(polygon "square")
+             :height 20 :width 40
+             :color 'red :regular 'true
+             :sides 4)))
 
 
 (defun run-example ()
+
+  ;; MODIFIRED TEXT
+  (echo-act-r-output)
   
   (reset)
   
@@ -56,26 +84,15 @@ Also, the visual-location (:visloc-type) and object (:visobj-type) types will be
          |#
         ;; MODIFIED CODE
         ;; Instead of creating object features that are independent of lisp objects.
-        ;; Instances that inherit from the visicon-object class are created and 
-        ;; can be modified as lisp objects. 
-        (polygon1 (make-instance
-                   'polygon :x 0 :y 50
-                   :value '(polygon "poly1")
-                   :height 20 :width 40
-                   :color 'blue :regular 'false
-                   :sides 7))
-        (polygon2 (make-instance
-                   'polygon :x 50 :y 70
-                   :value '(polygon "square")
-                   :height 20 :width 40
-                   :color 'red :regular 'true
-                   :sides 4))
-        )
+        ;; Instances that inherit from the visicon-object class are can be modified 
+        ;; as lisp objects. These objects are associated with a device, in the current
+        ;; case the *figures* device.
+        (polygon1 (get-device-object 'polygon1 *figures*))
+        (polygon2 (get-device-object 'polygon1 *figures*)))
 
     ;; MODIFIED CODE
-    ;; The visicon-object class separate between the lisp class and its reprentation
-    ;; in the visicon.
-    (add-to-visicon (list polygon1 polygon2))
+    ;; Adding all device-objects to the act-r visicon
+    (add-to-visicon *figures*)
 
     ;; ORIGINAL TEXT AND CODE
     ;; Give the vision module a chance to process the display
@@ -168,10 +185,13 @@ Also, the visual-location (:visloc-type) and object (:visobj-type) types will be
     ;; run the model to show the updated
     (run 10)
     
-    ;; ORIGINAL TEXT AND CODE
+    ;; ORIGINAL TEXT
     ;; delete all of the visicon features.  delete-all-visicon-features
     ;; removes all of the features from the visicon.
-    (delete-all-visicon-features)
+    ;; (delete-all-visicon-features)
+
+    ;; MODIFIED CODE
+    (delete-from-visicon *figures*)
     
     ;; ORIGINAL TEXT AND CODE
     ;; Give the vision module a chance to process the display
@@ -194,5 +214,11 @@ Also, the visual-location (:visloc-type) and object (:visobj-type) types will be
 ;;; since the currently attended item is unchanged in each
 ;;; case.
 
-(load-act-r-model "ACT-R:examples;vision-module;adjust-visicon-features-model.lisp")
+;; (load-act-r-model "ACT-R:examples;vision-module;adjust-visicon-features-model.lisp")
+
+(load-act-r-model 
+ (make-pathname 
+  :directory (pathname-directory (or *load-pathname* *compile-file-pathname*))
+  :type "lisp"
+  :name "adjust-visicon-features-modified-model"))
 

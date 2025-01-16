@@ -22,7 +22,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; 
 ;;; Filename    : visicon-objet.lisp
-;;; Version     : 1.4 (2025-01-15)
+;;; Version     : 1.4.1 (2025-01-16)
 ;;; 
 ;;; Description : The **visicon-object class and methods** is a software module
 ;;;             : designed to work with the ACT-R cognitive architecture, 
@@ -34,6 +34,13 @@
 ;;; To do       : 
 ;;; 
 ;;; ----- History (reversed time order) -----
+;;;
+;;; 2025.01.16 Bruno  
+;;;             : Version 1.4.1 Added a slot to the visicon-object class to determine
+;;;               if the features will include or not the device name. The slot :initarg
+;;;               is :with-device-feature. The default is nil.
+;;;               Also, updated the examples to reflect version 4.1.1. The piano keyboard
+;;;               example will be re-introduce later. 
 ;;;
 ;;; 2025.01.15 Bruno  
 ;;;             : Version 1.4. Automatic chunk definitions for visicon-object slot values
@@ -95,10 +102,6 @@
 ;;; (device-demo)
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defparameter *visicon-objects* (make-hash-table)
-  "A hash table to map visual-location names to visicon-object instances for all devices.")
-
 (defparameter *actr-pixels/inch* 72
   "Value for the :pixels/inch parameter.")
 
@@ -176,6 +179,8 @@ cognitive simulations."))
                 :documentation "The visual-location type used in the act-r add-visicon-features command.")
    (visobj-type :initform 'visual-object :initarg :visobj-type
                 :documentation "The visual-object type used in the act-r add-visicon-features command.")
+   (with-device-feature :initarg :with-device-feature :initform nil :reader with-device-feature
+                        :documentation "Determines if a device feature is included or not as a visicon feature.")
    (visual-features :initform nil :initarg :visual-features
                     :documentation "List of slots shared by visual-location and visual-object features.")
    (visual-location-features :initform nil :initarg :visual-location-features
@@ -320,7 +325,8 @@ by ACT-R at runtime."))
   (with-slots (visual-features) visicon-object
     (let (features)
       (dolist (slot visual-features 
-                    (append `(device ,(name (device visicon-object)))
+                    (append (when (with-device-feature visicon-object)
+                              `(device ,(name (device visicon-object))))
                             features))
         (setf features 
               (append features 
@@ -344,9 +350,12 @@ by ACT-R at runtime."))
   (append (list (feature-id visicon-object))
           (combined-features visicon-object)))
 
-(let ((vo (make-instance 'visicon-object :device (make-device))))
+(let ((vo1 (make-instance 'visicon-object :device (make-device)))
+      (vo2 (make-instance 'visicon-object :device (make-device) :with-device-feature t)))
+  (assert (equal '(ISA VISUAL-LOCATION SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1)
+                 (isa-features vo1)))
   (assert (equal '(ISA VISUAL-LOCATION SCREEN-X 0 SCREEN-Y 0 WIDTH 1 HEIGHT 1 DEVICE SOME-DEVICE)
-                 (isa-features vo))))
+                 (isa-features vo2))))
 ;;;
 ;;; act-r chunk-type and chunk functions interface
 ;;;
