@@ -102,15 +102,31 @@
 ;;; (device-demo)
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; constant and parameters 
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defconstant *empty* 'empty
+  "A symbol to use instead of nil for chunk slot values." )
+
 (defparameter *actr-pixels/inch* 72
-  "Value for the :pixels/inch parameter.")
+  "Value of the :pixels/inch parameter. The act-r parameter is only available when a model is loaded.")
 
 (defparameter *actr-viewing-distance* 15
-  "Value in inches for the :viewing-distance parameter.")
+  "Value in inches for the :viewing-distance parameter. The act-r parameter is only available when a model is loaded.")
 
 (defparameter *cm/inch* 2.45
   "There are 2.45 centimeters per inch.")
 
+(defparameter *visicon-object-devices* (make-hash-table :test 'equalp)
+  "A hash table for visicon-object devices, not all act-r devices (ex. exp-window, microphone, keyboard.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; utilities 
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defun cm->pixels (centimeters)
   "Convert cm to pixels."
   (floor (* (/ centimeters *cm/inch*) 
@@ -121,8 +137,10 @@
 ;;; device 
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defclass device ()
-  ((name :initarg :name :initform 'some-device :type symbol :reader name)
+  ((name :initarg :name :initform "some-device" :type string :reader name)
+   (interfaces :initarg :interfaces :initform '("vision") :type list :reader interfaces)
    (device-objects :initform (make-hash-table) :reader device-objects)
    (objects-in-visicon :initform (make-hash-table) :reader objects-in-visicon))
   (:documentation 
@@ -132,6 +150,29 @@ if they have been added to the visicon. By separating device modeling from the c
 interaction with a device, this design streamlines the integration of device objects into 
 cognitive simulations."))
 
+;;;
+;;; *visicon-object-devices* 
+;;;
+(defmethod get-visicon-object-device ((name string))
+  (gethash name *visicon-object-devices*))
+
+(defmethod (setf get-visicon-object-device) ((device device) (name string))
+  (setf (gethash name *visicon-object-devices*) device))
+
+(defun remove-visicon-object-device (name)
+  (delete-from-visicon (get-visicon-object-device name))
+  (remhash name *visicon-object-devices*))
+  
+(defun remove-all-visicon-object-devices ()
+  (maphash
+   (lambda (name device)
+     (declare (ignore device))
+     (remove-visicon-object-device name))
+   *visicon-object-devices*))
+           
+;;;
+;;; device
+;;;
 (defmethod print-object ((device device) (stream stream))
   (with-slots (name device-objects objects-in-visicon) device
     (print-unreadable-object (device stream :type t)
@@ -139,7 +180,40 @@ cognitive simulations."))
               (hash-table-count device-objects) 
               (hash-table-count objects-in-visicon)))))
 
-(defun make-device (&key (name 'some-device) (class 'device))
+#|
+(defmethod init-actr-device ((device device))
+  (dolist (interface (interfaces device) device)
+    (when (get-module-fct (intern (string-upcase interface) :keyword))
+      (unless (find (name device) (current-devices interface) :key 'second :test 'string-equal)
+        (setf (get-visicon-object-device (name device)) device)
+        (install-device (list interface (name device))))))
+  device)
+
+(defmethod remove-actr-device ((device device))
+  (remhash (name device) (device-table *default-device-interface*))
+  (remove-visicon-object-device (name device)))
+
+(defmethod send-features ((device device) (features list))
+  t)
+
+(defmethod notify-actr-device ((device device) (features list))
+  (cond ((stringp (first features))
+         (send-features device features))
+        ((not (listp features))
+         (print-warning "Features must be a list ~s." features))
+        (t
+         (print-warning "Notification for ~s must be have a string as the first feature but given ~s" (first features)))))
+
+(add-act-r-command "init-actr-device" 'init-actr-device "Internal command for installing device. Do not call.")
+(add-act-r-command "remove-actr-device" 'remove-actr-device "Internal command for unstalling device. Do not call.")
+(add-act-r-command "notify-actr-device" 'notify-actr-device "Internal command for notifying a device.  Do not call.")
+
+(defmethod initialize-instance :after ((object device) &rest initargs &key &allow-other-keys)
+  (unless (member (name object) (defined-devices) :test #'string=)
+    (define-device (name object) "init-actr-device" "remove-actr-device" "notify-actr-device")))
+|#
+
+(defun make-device (&key (name "some-device") (class 'device))
   (apply #'make-instance (list class :name name)))
 
 ;;;
@@ -169,7 +243,7 @@ cognitive simulations."))
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defclass visicon-object ()
-  ((uid :initarg :uid :type symbol :reader uid
+  ((uid :initarg :uid :type symbol :accessor uid
         :documentation "A unique identifier for the visicon-object, used as the hash key.")
    (device :initarg :device :type devive :reader device
            :documentation "The device containing the visicon-object.")
@@ -321,12 +395,15 @@ by ACT-R at runtime."))
                         (list slot 
                               (list nil (slot-value visicon-object slot))))))))))
 
+(defun device-name->symbol (visicon-object)
+  (intern (string-upcase (name (device visicon-object)))))
+
 (defun visual-location-object-features (visicon-object)
   (with-slots (visual-features) visicon-object
     (let (features)
       (dolist (slot visual-features 
                     (append (when (with-device-feature visicon-object)
-                              `(device ,(name (device visicon-object))))
+                              `(device ,(device-name->symbol visicon-object)))
                             features))
         (setf features 
               (append features 
@@ -482,11 +559,17 @@ by ACT-R at runtime."))
         (setf chunk-names
               (adjoin (slot-value visicon-object slot) chunk-names))))))
         
-(defun define-visicon-object-chunks (visicon-object)
+(defmethod define-visicon-object-chunks ((visicon-object visicon-object))
   (let (chunks)
     (dolist (chunk-name (chunk-names visicon-object) chunks)
       (unless (chunk-p-fct chunk-name)
         (setf chunks (append chunks (define-chunks-fct (list chunk-name))))))))
+
+(defmethod define-visicon-object-chunks ((device device))
+  (let ((chunk-name (type-of device)))
+    (unless (chunk-p-fct chunk-name)
+      (define-chunks-fct (list chunk-name)))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -511,6 +594,7 @@ by ACT-R at runtime."))
       (setf (get-visicon-object visual-location (device visicon-object)) visicon-object))))
 
 (defmethod add-to-visicon ((device device))
+  (define-visicon-object-chunks device)
   (maphash 
    (lambda (uid visicon-object)
      (declare (ignore uid))
@@ -548,7 +632,7 @@ by ACT-R at runtime."))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;              
 ;; Define a class that inherits from visicon-object
 (defparameter *device-demo*
-  (make-device :name 'device-demo))
+  (make-device :name "device-demo"))
 
 (defclass square (visicon-object)
   ((sides :initform 4 :reader sides)
@@ -597,14 +681,18 @@ by ACT-R at runtime."))
     (setf (x vo1) 10)
     (modify-visicon vo1)
     (run-n-events 3)
+
     (setf (x vo1) 30)
     (modify-visicon vo1)
+    (run-n-events 3)
     (print-visicon)
 
     (format t "DELETE FROM VISICON~%")
     (delete-from-visicon vo2)
     (run-n-events 3)
     (print-visicon)
+
+    ;(remove-actr-device *device-demo*)
     ))
 
 :eof
