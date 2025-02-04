@@ -139,7 +139,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defclass device ()
-  ((name :initarg :name :initform "some-device" :type string :reader name)
+  ((name :initarg :name :initform 'some-device :type symbol :reader name)
    (interfaces :initarg :interfaces :initform '("vision") :type list :reader interfaces)
    (device-objects :initform (make-hash-table) :reader device-objects)
    (objects-in-visicon :initform (make-hash-table) :reader objects-in-visicon))
@@ -213,8 +213,8 @@ cognitive simulations."))
     (define-device (name object) "init-actr-device" "remove-actr-device" "notify-actr-device")))
 |#
 
-(defun make-device (&key (name "some-device") (class 'device))
-  (apply #'make-instance (list class :name name)))
+(defun make-device (&key (name 'some-device) (class 'device))
+  (apply #'make-instance (append (list class :name name))))
 
 ;;;
 ;;; device-objects
@@ -604,12 +604,14 @@ by ACT-R at runtime."))
 
 (defmethod modify-visicon ((visicon-object visicon-object))
   (define-visicon-object-chunks visicon-object)
+  ;(print (list (visual-location visicon-object) visicon-object))
   (modify-visicon-features 
    (modification-features-list visicon-object)))
 
 (defmethod delete-from-visicon ((visicon-object visicon-object))
   (with-slots (feature-id visual-location) visicon-object 
-    (delete-visicon-features feature-id)
+    (when (member feature-id (visicon (get-module :vision)))
+      (delete-visicon-features feature-id))
     (remhash visual-location (objects-in-visicon (device visicon-object)))
     (setf feature-id nil
           visual-location nil)))
@@ -626,13 +628,21 @@ by ACT-R at runtime."))
    (objects-in-visicon device))
   device)
 
-(defun clear-visicon-objects (device)
-  (delete-from-visicon device))
+(defmethod reset-to-default-values ((visicon-object visicon-object))
+  t)
+
+(defmethod clear-visicon-objects ((device device))
+  (delete-from-visicon device)
+  (maphash
+   (lambda (uid device-object)
+     (declare (ignore uid))
+     (reset-to-default-values device-object))
+   (device-objects device)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;              
 ;; Define a class that inherits from visicon-object
 (defparameter *device-demo*
-  (make-device :name "device-demo"))
+  (make-device :name 'device-demo))
 
 (defclass square (visicon-object)
   ((sides :initform 4 :reader sides)
